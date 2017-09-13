@@ -17,4 +17,6 @@ Ggplot2 and reshape2:
 install.packages("ggplot2")  
 install.packages("reshape2")  
 
-Please refer to the packages_to_install.Rmd file prior to runningn the sample_RNA-Seq_analysis.Rmd script.  
+Please refer to the packages_to_install.Rmd file prior to runningn the sample_RNA-Seq_analysis.Rmd script.    
+# Usage  
+This sample analysis is written in an R Markdown document, intended to be executed in RStudio with R version 3.3.  

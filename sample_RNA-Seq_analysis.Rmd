@@ -228,28 +228,28 @@ ggplot(data = top.10, aes(x = dex, y = Count, fill = dex)) + geom_boxplot() + ge
 
 
 # Session information
-R version 3.3.3 (2017-03-06)
-Platform: x86_64-apple-darwin13.4.0 (64-bit)
-Running under: OS X El Capitan 10.11.6
+R version 3.3.3 (2017-03-06)  
+Platform: x86_64-apple-darwin13.4.0 (64-bit)  
+Running under: OS X El Capitan 10.11.6  
+  
+locale:  
+[1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8  
+  
+attached base packages:  
+[1] parallel  stats4    stats     graphics  grDevices utils     datasets   
+[8] methods   base       
 
-locale:
-[1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
-
-attached base packages:
-[1] parallel  stats4    stats     graphics  grDevices utils     datasets 
-[8] methods   base     
-
-other attached packages:
- [1] ggplot2_2.2.1              reshape2_1.4.2            
- [3] pheatmap_1.0.8             biomaRt_2.30.0            
- [5] DESeq2_1.14.1              airway_0.108.0            
+other attached packages:  
+ [1] ggplot2_2.2.1              reshape2_1.4.2              
+ [3] pheatmap_1.0.8             biomaRt_2.30.0              
+ [5] DESeq2_1.14.1              airway_0.108.0              
  [7] SummarizedExperiment_1.4.0 Biobase_2.34.0            
  [9] GenomicRanges_1.26.4       GenomeInfoDb_1.10.3       
 [11] IRanges_2.8.2              S4Vectors_0.12.2          
 [13] BiocGenerics_0.20.0        rmarkdown_1.6             
-[15] knitr_1.17 
-
-loaded via a namespace (and not attached):
+[15] knitr_1.17  
+  
+loaded via a namespace (and not attached):  
  [1] genefilter_1.56.0    locfit_1.5-9.1       splines_3.3.3       
  [4] lattice_0.20-35      colorspace_1.3-2     htmltools_0.3.6     
  [7] yaml_2.1.14          base64enc_0.1-3      blob_1.1.0          
@@ -268,7 +268,7 @@ loaded via a namespace (and not attached):
 [46] bitops_1.0-6         magrittr_1.5         lazyeval_0.2.0      
 [49] RCurl_1.95-4.8       tibble_1.3.4         RSQLite_2.0         
 [52] Formula_1.2-2        cluster_2.0.6        Matrix_1.2-11       
-[55] data.table_1.10.4    rpart_4.1-11         nnet_7.3-12 
+[55] data.table_1.10.4    rpart_4.1-11         nnet_7.3-12  
 ```{r}
 sessionInfo()
 ```

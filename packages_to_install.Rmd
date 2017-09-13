@@ -1,0 +1,32 @@
+---
+title: "packages required for sample RNA-Seq analysis"
+author: "Agnieszka Thompson"
+date: "9/12/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Install Markdown and knitr
+```{r}
+install.packages("rmarkdown")
+install.packages("knitr")
+```
+
+Install Bioconductor packages
+```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite("DESeq2")
+biocLite("airway")
+biocLite("biomaRt")
+biocLite("pheatmap")
+
+```
+
+Install ggplot2 and reshape2 packages if necessary
+```{r}
+install.packages("ggplot2")
+install.packages("reshape2")
+```

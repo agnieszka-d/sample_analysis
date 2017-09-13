@@ -1,0 +1,262 @@
+---
+title: "sample RNA-Seq analysis"
+author: "Agnieszka Thompson"
+#output: html_document
+output: github_document
+---
+
+```{r setup, include=FALSE}
+library("knitr")
+library("rmarkdown")
+opts_chunk$set(message = FALSE, error = FALSE, warning = FALSE, fig.width=5, fig.height=5)
+```
+
+# Introductory information
+In my typical analysis workflow, I would start with raw sequencing reads (in my experience they would be small-RNA-Seq experiments). I would start by formatting .sra files into FASTQ files with fastqdump command from the SRAToolkit software. I next would perform a QC analysis using FastQC program. If the adapter sequence is not provided, I would look at overrepresented sequences in the FastQC analysis output or use my own Python script implementing a sliding window to identify most represented k-mers. Having identified the adapter sequence, I would remove it using the Cutadapt tool and remove low quality reads using fastx toolkit. I would then map reads from quality-filtered FASTQ files to the most recent version of the genome (in my case it is TAIR10 for Arabidopsis thaliana) using bowtie2. In my work I am interested in tRNAs which are highly modified and bowtie2 allows me to map with mismatches if I adjust the default parameters. The output of this process is in the form of bamfiles. I then use samtools to remove unmapped reads and filter results by strand or number of mismatches. In my experience, I have used my own Python scripts to prepare counts tables from .sam files. 
+
+For the purpose of this sample analysis I am using a pre-processed public dataset from the "airway" package. The data in the "airway" package pertain to an RNA-Seq experiment on smooth muscle cells under treated with dexamethasone (4 samples) vs untreated (4 samples). 
+
+# Required packages
+These libraries will be required, if not installed please use the packages_to_install.Rmd to install them.
+```{r}
+library("airway")
+library("DESeq2")
+library("biomaRt")
+library("pheatmap")
+library("reshape2")
+library("ggplot2")
+```
+
+# Explore the "airway" dataset
+```{r}
+data("airway")
+# to read specific information about the airway dataset
+# vignette("airway")
+```
+
+View the summary experiment
+```{r}
+head(airway)
+```
+
+View sample descriptions:
+```{r}
+colData(airway)
+```
+
+View the counts table:
+```{r}
+head(assay(airway))
+```
+
+# Prepare counts and sample information from the Summary Experiment for the DESeq2 analysis
+```{r}
+counts <- assay(airway)
+samples <- colData(airway)
+```
+
+Prepare DESeq2 dataset object.
+```{r}
+# to learn more about the DESeq object
+?DESeqDataSetFromMatrix
+
+# prepare the DESeq object
+deseq.mat <- DESeqDataSetFromMatrix(countData = counts, colData = samples, design = ~ cell + dex)
+```
+
+Remove genes with no coverage or only covered by a single read.
+```{r}
+# check how many genes have insufficient coverage (max 1 read)
+nrow(subset(deseq.mat, rowSums(counts(deseq.mat)) <= 1))
+
+# remove them prior to further analysis
+deseq.mat <- subset(deseq.mat, rowSums(counts(deseq.mat)) > 1)
+```
+
+#Exploratory analysis
+Explore distribution of counts per gene to estimate the level of lowly expressed genes.
+```{r}
+hist(rowSums(counts(deseq.mat)))
+```
+
+Show how many genes have coverage below 20.
+```{r}
+length(rowSums(counts(subset(deseq.mat, rowSums(counts(deseq.mat)) < 20))))
+```
+
+It is advised to use one of the two transformations offerd by DESeq2 when gene counts are close to 0. The authors recommend VST transformation for performing analysis on datasets with many samples (n > 30) and rlog in smaller datasets especially with variable sequencing depths between samples. Since airway dataset consists of 8 samples, I am going to use rlog transformation.
+
+First let's see the sequencing depth of each sample (total read counts per sample) displayed as millions of reads.
+```{r}
+round( colSums(counts(deseq.mat)) / 1e6, 1 )
+```
+
+Show a dendrogram of distances between samples before transforming counts.
+```{r}
+plot(hclust(dist(t(assay(deseq.mat)))))
+```
+
+Transform data using the rlog transformation.
+```{r}
+deseq.mat.rlog <- rlog(deseq.mat, blind = FALSE)
+```
+
+Show a dendrogram of distances between samples after rlog transformation.
+```{r}
+plot(hclust(dist(t(assay(deseq.mat.rlog)))))
+```
+
+
+Review which experiments correspond to treated vs untreated sample
+it appears that rlog transformation allowed for distinct grouping of all treated and all untreated samples as two branches of the dendrogram.
+```{r}
+samples
+```
+
+Review distances between samples as a plot of Principal Components
+```{r}
+plotPCA(deseq.mat.rlog, intgroup = c("dex", "cell"))
+```
+
+# Differential expression analysis
+Create a DESeq analysis object.
+```{r}
+deseq.obj <- DESeq(deseq.mat)
+```
+
+Extract results:
+The default false discovery rate for this model is 10%, for more stringent results it is possible to change it to 5% by adjusting alpha to 0.05.
+```{r}
+deseq.res <- results(deseq.obj, alpha = 0.05)
+```
+
+Review statistical methods information about each calculated value.
+```{r}
+mcols(deseq.res, use.names = TRUE)
+```
+
+Check how many genes appear to be significantly differentially expressed between treated and non-trated samples.
+```{r}
+table(deseq.res$padj < 0.05)
+```
+# Visualize results
+
+View differentially expressed genes vs non-differentially expressed genes on a MA plot where significantly differentially expressed genes appear as red dots.
+```{r}
+plotMA(deseq.res, ylim=c(-5,5))
+```
+
+
+Check how many genes appear to be differentially expressed with log2 fold change of at least 2 (expression is double or half of untreated sample).
+```{r}
+deseq.res.lfc1 <- results(deseq.obj, lfcThreshold = 1)
+table(deseq.res.lfc1$padj < 0.05)
+```
+
+Show first 10 gene Ensembl IDs.
+```{r}
+head(rownames(deseq.res.lfc1)[which(deseq.res.lfc1$padj< 0.05)], 10)
+```
+
+Find their respective gene IDs.
+```{r}
+genes.df <- data.frame(rownames(deseq.res.lfc1)[which(deseq.res.lfc1$padj< 0.05)])
+colnames(genes.df)[1] <- "ensembl_gene_id"
+
+mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+
+G_list <- getBM(filters= "ensembl_gene_id", 
+                attributes= c("ensembl_gene_id","hgnc_symbol"),
+                values=genes.df$ensembl_gene_id, mart= mart)
+
+genes.df <- merge(genes.df, G_list, by="ensembl_gene_id")
+rownames(genes.df) <- genes.df[,1]
+
+```
+
+
+Visualize results using MA plot where significantly differentially expressed genes appear as red dots.
+```{r}
+plotMA(deseq.res.lfc1, ylim=c(-5,5))
+```
+
+Investigate clusters of most differentially expressed genes.
+```{r}
+# get top 30 most differentially expressed genes
+most.diff.exp.genes <- head(deseq.res.lfc1[with(deseq.res.lfc1, order(-abs(log2FoldChange))), ], 30)
+
+# prepare matrix for heatmap visualization
+mat <- assay(deseq.mat.rlog)[rownames(most.diff.exp.genes), ]
+mat <- mat - rowMeans(mat)
+
+# instead of Ensembl IDs display gene symbols
+mat <- merge(mat, genes.df, by=0)
+
+# replace the missing Gene.symbol with Gene.id
+mat$hgnc_symbol[mat$hgnc_symbol==""] <- as.character(mat$ensembl_gene_id[mat$hgnc_symbol==""])
+
+rownames(mat) <- mat$hgnc_symbol
+mat <- mat[,(2:9)]
+
+# this is to display additional information about the samples (treated vs. untreated)
+df <- as.data.frame(colData(deseq.mat.rlog)[,c("cell", "dex")])
+```
+
+View on a heatmap
+```{r, fig.height=10}
+pheatmap(mat, annotation_col = df)
+```
+
+
+Show expression for top 10 most diferentially expressed genes for treated vs untreated samples.
+```{r, fig.width=10, fig.height=10}
+# find top 10 most differentially expressed genes
+most.diff.exp.genes.10 <- head(deseq.res.lfc1[with(deseq.res.lfc1, order(-abs(log2FoldChange))), ], 10)
+top.10 <- melt(counts(deseq.obj[rownames(most.diff.exp.genes.10),]))
+
+# add information about Gene.symbols
+top.10 <- merge(top.10, genes.df, by.x = c("Var1"), by.y = c("ensembl_gene_id"))
+colnames(top.10) <- c("Gene.id", "Run", "Count", "Gene.symbol")
+top.10 <- as.data.frame(merge(top.10, samples[,c(3,5)], by="Run"))
+
+# replace the missing Gene.symbol with Gene.id
+top.10$Gene.symbol[top.10$Gene.symbol==""] <- as.character(top.10$Gene.id[top.10$Gene.symbol==""])
+
+# visualize results as a boxplot
+ggplot(data = top.10, aes(x = dex, y = Count, fill = dex)) + geom_boxplot() + geom_point() + facet_wrap(~Gene.symbol, scales = "free", ncol = 5) 
+```
+
+
+# Session information
+```{r}
+sessionInfo()
+```
+
+# References
+Himes BE, Jiang X, Wagner P, Hu R, Wang Q, Klanderman B, Whitaker
+  RM, Duan Q, Lasky-Su J, Nikolos C, Jester W, Johnson M, Panettieri
+  R Jr, Tantisira KG, Weiss ST, Lu Q. 'RNA-Seq Transcriptome
+  Profiling Identifies CRISPLD2 as a Glucocorticoid Responsive Gene
+  that Modulates Cytokine Function in Airway Smooth Muscle Cells.'
+  PLoS One. 2014 Jun 13;9(6):e99625. PMID: 24926665.
+  
+Michael I Love, Wolfgang Huber and Simon Anders (2014): Moderated
+  estimation of fold change and dispersion for RNA-Seq data with
+  DESeq2. Genome Biology
+  
+Mapping identifiers for the integration of genomic datasets with the
+  R/Bioconductor package biomaRt. Steffen Durinck, Paul T. Spellman, Ewan
+  Birney and Wolfgang Huber, Nature Protocols 4, 1184-1191 (2009).
+
+Raivo Kolde (2015). pheatmap: Pretty Heatmaps. R package version
+  1.0.8. https://CRAN.R-project.org/package=pheatmap
+
+Hadley Wickham (2007). Reshaping Data with the reshape Package.
+  Journal of Statistical Software, 21(12), 1-20. URL
+  http://www.jstatsoft.org/v21/i12/.
+  
+H. Wickham. ggplot2: Elegant Graphics for Data Analysis.
+  Springer-Verlag New York, 2009.
+  
+
+
